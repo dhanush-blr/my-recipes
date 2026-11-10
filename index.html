@@ -209,7 +209,7 @@
           >
         </div>
 
-        <div class="flex items-center gap-2">
+        <div class="flex items-center gap-2 flex-wrap justify-end">
           <!-- Quick Clear Button when searching -->
           <button
             type="button"
@@ -228,6 +228,23 @@
           >
             📥 Export Backup
           </button>
+
+          <!-- Import JSON Button -->
+          <button
+            type="button"
+            id="import-data-btn"
+            title="Restore recipes from a JSON backup"
+            class="px-3.5 py-2 rounded-xl text-xs font-medium text-stone-600 dark:text-stone-300 hover:text-stone-900 dark:hover:text-white bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-800 hover:bg-stone-50 dark:hover:bg-stone-800 transition-colors shadow-sm"
+          >
+            📤 Import Backup
+          </button>
+
+          <input
+            type="file"
+            id="import-file-input"
+            accept=".json"
+            class="hidden"
+          >
 
           <!-- Restore Sample Recipes button -->
           <button
@@ -350,6 +367,9 @@
     </main>
   </div>
 
+  <!-- Toast notifications -->
+  <div id="toast-container" class="fixed bottom-4 right-4 z-[60] flex flex-col items-end gap-2" aria-live="polite" aria-atomic="true"></div>
+
   <script>
     // 1. DATA: Initial starter recipes with baseServings
     const STARTER_RECIPES = [
@@ -451,6 +471,16 @@
       } catch (err) {
         console.warn("Storage write error:", err);
       }
+    }
+
+    // Escape user/imported text before injecting it into markup
+    function escapeHtml(value) {
+      return String(value)
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#39;");
     }
 
     // Helper: Parse minutes from time string (e.g. "20 mins" -> 1200 seconds)
@@ -603,10 +633,10 @@
           <div>
             <div class="flex items-start justify-between gap-3 mb-3">
               <div class="flex items-center gap-3">
-                <span class="text-3xl p-2 bg-amber-100 dark:bg-amber-950/60 rounded-xl leading-none">${recipe.icon}</span>
+                <span class="text-3xl p-2 bg-amber-100 dark:bg-amber-950/60 rounded-xl leading-none">${escapeHtml(recipe.icon)}</span>
                 <div>
                   <div class="flex items-center gap-2">
-                    <h3 class="text-lg font-bold text-stone-900 dark:text-white">${recipe.title}</h3>
+                    <h3 class="text-lg font-bold text-stone-900 dark:text-white">${escapeHtml(recipe.title)}</h3>
                     <button
                       type="button"
                       id="fav-btn-${recipe.id}"
@@ -617,12 +647,12 @@
                     </button>
                   </div>
                   <span class="inline-block text-xs font-semibold px-2.5 py-0.5 rounded-full bg-stone-100 dark:bg-stone-800 text-stone-600 dark:text-stone-300 mt-1">
-                    ${recipe.category}
+                    ${escapeHtml(recipe.category)}
                   </span>
                 </div>
               </div>
               <span class="text-xs font-medium text-stone-500 dark:text-stone-400 whitespace-nowrap bg-stone-50 dark:bg-stone-800/80 px-2 py-1 rounded-md border border-stone-100 dark:border-stone-800">
-                ⏱️ ${recipe.time}
+                ⏱️ ${escapeHtml(recipe.time)}
               </span>
             </div>
 
@@ -668,7 +698,7 @@
                     <span class="text-base">⏳</span>
                     <div>
                       <h4 class="text-xs font-bold text-stone-800 dark:text-stone-200">Kitchen Timer</h4>
-                      <p class="text-[11px] text-stone-500 dark:text-stone-400">Cook time: ${recipe.time}</p>
+                      <p class="text-[11px] text-stone-500 dark:text-stone-400">Cook time: ${escapeHtml(recipe.time)}</p>
                     </div>
                   </div>
 
@@ -712,7 +742,7 @@
                   Ingredients ${scaleRatio !== 1 ? `<span class="text-amber-600 dark:text-amber-300 font-normal lowercase">(scaled for ${currentServ} servings)</span>` : ''}
                 </h4>
                 <ul class="list-disc list-inside space-y-1 text-stone-600 dark:text-stone-300 pl-1">
-                  ${recipe.ingredients.map(ing => `<li>${formatScaledIngredient(ing, scaleRatio)}</li>`).join('')}
+                  ${recipe.ingredients.map(ing => `<li>${escapeHtml(formatScaledIngredient(ing, scaleRatio))}</li>`).join('')}
                 </ul>
               </div>
 
@@ -721,7 +751,7 @@
                   Instructions
                 </h4>
                 <ol class="list-decimal list-inside space-y-1 text-stone-600 dark:text-stone-300 pl-1">
-                  ${recipe.steps.map(step => `<li>${step}</li>`).join('')}
+                  ${recipe.steps.map(step => `<li>${escapeHtml(step)}</li>`).join('')}
                 </ol>
               </div>
 
@@ -958,6 +988,113 @@
       document.body.appendChild(downloadAnchor);
       downloadAnchor.click();
       downloadAnchor.remove();
+    });
+
+    // Toast notification helper (non-blocking, auto-dismissing)
+    function showToast(message, type = "success") {
+      const container = document.getElementById("toast-container");
+      const palette = type === "error"
+        ? "bg-red-50 dark:bg-red-950/90 text-red-800 dark:text-red-200 border-red-200 dark:border-red-800"
+        : "bg-emerald-50 dark:bg-emerald-950/90 text-emerald-800 dark:text-emerald-200 border-emerald-200 dark:border-emerald-800";
+
+      const toast = document.createElement("div");
+      toast.className = `pointer-events-auto max-w-[calc(100vw-2rem)] sm:max-w-sm px-4 py-3 rounded-xl border text-xs font-semibold shadow-lg transition-all duration-300 ease-out opacity-0 -translate-y-1 ${palette}`;
+      toast.setAttribute("role", type === "error" ? "alert" : "status");
+      toast.textContent = message;
+
+      container.appendChild(toast);
+      requestAnimationFrame(() => toast.classList.remove("opacity-0", "-translate-y-1"));
+
+      setTimeout(() => {
+        toast.classList.add("opacity-0", "-translate-y-1");
+        setTimeout(() => toast.remove(), 300);
+      }, 3500);
+    }
+
+    // Import Backup JSON button
+    const importBtn = document.getElementById("import-data-btn");
+    const importFileInput = document.getElementById("import-file-input");
+
+    importBtn.addEventListener("click", () => {
+      importFileInput.click();
+    });
+
+    function normalizeImportedRecipe(raw) {
+      const baseServings = parseInt(raw.baseServings, 10);
+      const validBaseServings = Number.isFinite(baseServings) && baseServings > 0 ? baseServings : 2;
+      const currentServings = parseInt(raw.currentServings, 10);
+
+      return {
+        id: raw.id,
+        title: raw.title.trim(),
+        category: typeof raw.category === "string" && raw.category.trim() ? raw.category.trim() : "Dinner",
+        time: typeof raw.time === "string" && raw.time.trim() ? raw.time.trim() : "10 mins",
+        icon: typeof raw.icon === "string" && raw.icon.trim() ? raw.icon.trim() : "🍽️",
+        baseServings: validBaseServings,
+        currentServings: Number.isFinite(currentServings) && currentServings > 0 ? currentServings : validBaseServings,
+        favorite: Boolean(raw.favorite),
+        ingredients: Array.isArray(raw.ingredients) ? raw.ingredients.filter(i => typeof i === "string") : [],
+        steps: Array.isArray(raw.steps) ? raw.steps.filter(s => typeof s === "string") : []
+      };
+    }
+
+    importFileInput.addEventListener("change", (e) => {
+      const file = e.target.files && e.target.files[0];
+      importFileInput.value = "";
+      if (!file) return;
+
+      const reader = new FileReader();
+
+      reader.onload = () => {
+        let parsed;
+        try {
+          parsed = JSON.parse(reader.result);
+        } catch (err) {
+          console.warn("Import parse error:", err);
+          showToast("That file isn't valid JSON. Please choose a backup exported from this app.", "error");
+          return;
+        }
+
+        const isRecipe = (item) =>
+          item && typeof item === "object" && !Array.isArray(item) &&
+          typeof item.title === "string" && item.title.trim() !== "";
+
+        if (!Array.isArray(parsed) || parsed.length === 0 || !parsed.every(isRecipe)) {
+          showToast("No recipes found in that file. It doesn't look like a valid Recipe Box backup.", "error");
+          return;
+        }
+
+        const usedIds = new Set(recipes.map(r => r.id));
+        let idSeed = Date.now();
+
+        const importedRecipes = parsed.map((raw) => {
+          const recipe = normalizeImportedRecipe(raw);
+          if (typeof recipe.id !== "number" || !Number.isFinite(recipe.id) || usedIds.has(recipe.id)) {
+            while (usedIds.has(idSeed)) idSeed += 1;
+            recipe.id = idSeed;
+            idSeed += 1;
+          }
+          usedIds.add(recipe.id);
+          return recipe;
+        });
+
+        recipes = [...importedRecipes, ...recipes];
+        saveRecipesToStorage();
+
+        if (searchQuery.trim() !== "" || activeCategory !== "All") {
+          clearBtn.click();
+        } else {
+          renderRecipes();
+        }
+
+        showToast(`Successfully imported ${importedRecipes.length} ${importedRecipes.length === 1 ? "recipe" : "recipes"}!`);
+      };
+
+      reader.onerror = () => {
+        showToast("I couldn't read that file. Please try again.", "error");
+      };
+
+      reader.readAsText(file);
     });
 
     // 6. SEARCH & CATEGORY LISTENERS
